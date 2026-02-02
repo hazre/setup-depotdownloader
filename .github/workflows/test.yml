@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'DepotDownloader version (e.g., "2.7.4", "latest")'
+        required: false
+        default: "latest"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup DepotDownloader
+        id: setup
+        uses: ./
+        with:
+          version: ${{ inputs.version || 'latest' }}
+
+      - name: Display Results
+        env:
+          PATH_OUTPUT: ${{ steps.setup.outputs.depotdownloader-path }}
+          VERSION_OUTPUT: ${{ steps.setup.outputs.depotdownloader-version }}
+        run: |
+          echo "Path: $PATH_OUTPUT"
+          echo "Version: $VERSION_OUTPUT"
+
+      - name: Test DepotDownloader
+        run: |
+          DepotDownloader -h || true
+          which DepotDownloader
