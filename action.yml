@@ -1,0 +1,106 @@
+name: "Setup DepotDownloader"
+description: "Install DepotDownloader via direct binary download"
+author: "hazre"
+branding:
+  icon: "download"
+  color: "gray-dark"
+
+inputs:
+  version:
+    description: 'DepotDownloader version (e.g., "2.7.4", "2.7.3", or "latest")'
+    required: false
+    default: "latest"
+
+outputs:
+  depotdownloader-path:
+    description: "Path to the DepotDownloader executable"
+    value: ${{ steps.setup.outputs.path }}
+  depotdownloader-version:
+    description: "Version of DepotDownloader that was installed"
+    value: ${{ steps.setup.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download and install DepotDownloader
+      id: setup
+      shell: bash
+      env:
+        REQUESTED_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        REQUESTED_VERSION="${REQUESTED_VERSION}"
+        BIN_DIR="${RUNNER_TEMP}/depotdownloader-bin"
+        mkdir -p "$BIN_DIR"
+
+        # Determine platform-specific asset name
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)
+            ASSET_PATTERN="*linux-x64.zip"
+            ;;
+          Linux-ARM64)
+            ASSET_PATTERN="*linux-arm64.zip"
+            ;;
+          macOS-X64)
+            ASSET_PATTERN="*macos-x64.zip"
+            ;;
+          macOS-ARM64)
+            ASSET_PATTERN="*macos-arm64.zip"
+            ;;
+          Windows-X64)
+            ASSET_PATTERN="*windows-x64.zip"
+            ;;
+          *)
+            echo "Unsupported platform: $RUNNER_OS-$RUNNER_ARCH"
+            exit 1
+            ;;
+        esac
+
+        # Download using gh CLI
+        cd "$BIN_DIR"
+        if [ "$REQUESTED_VERSION" = "latest" ]; then
+          echo "Downloading latest DepotDownloader release..."
+          gh release download --repo SteamRE/DepotDownloader --pattern "$ASSET_PATTERN"
+          TARGET_VERSION=$(gh release view --repo SteamRE/DepotDownloader --json tagName -q '.tagName' | sed 's/DepotDownloader_//')
+        else
+          echo "Downloading DepotDownloader v$REQUESTED_VERSION..."
+          RELEASE_TAG="DepotDownloader_${REQUESTED_VERSION}"
+          gh release download "$RELEASE_TAG" --repo SteamRE/DepotDownloader --pattern "$ASSET_PATTERN"
+          TARGET_VERSION="$REQUESTED_VERSION"
+        fi
+
+        # Extract
+        unzip -q *.zip
+        rm *.zip
+
+        # Make executable
+        chmod +x DepotDownloader 2>/dev/null || chmod +x DepotDownloader.exe 2>/dev/null || true
+
+        # Find binary
+        if [ -f "$BIN_DIR/DepotDownloader" ]; then
+          BINARY_PATH="$BIN_DIR/DepotDownloader"
+        elif [ -f "$BIN_DIR/DepotDownloader.exe" ]; then
+          BINARY_PATH="$BIN_DIR/DepotDownloader.exe"
+        else
+          echo "Error: Binary not found after extraction"
+          ls -la "$BIN_DIR"
+          exit 1
+        fi
+
+        echo "path=$BINARY_PATH" >> $GITHUB_OUTPUT
+        echo "version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+
+        # Add to PATH
+        echo "$BIN_DIR" >> $GITHUB_PATH
+
+        echo "✓ DepotDownloader v$TARGET_VERSION installed at $BINARY_PATH"
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        if ! command -v DepotDownloader &> /dev/null && ! command -v DepotDownloader.exe &> /dev/null; then
+          echo "Error: DepotDownloader not found in PATH"
+          exit 1
+        fi
+
+        DepotDownloader -h 2>/dev/null || DepotDownloader.exe -h 2>/dev/null || echo "Ready"
