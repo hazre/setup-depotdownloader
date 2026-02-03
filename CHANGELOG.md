@@ -1,3 +1,9 @@
+## 1.0.1 (2026-02-03)
+
+### Fixes
+
+- update workflow to manage version tags
+
 ## 1.0.0 (2026-02-02)
 
 ### Notes
